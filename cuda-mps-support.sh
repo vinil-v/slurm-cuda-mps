@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Define file paths
 SLURM_CONF="/etc/slurm/slurm.conf"
@@ -53,14 +53,22 @@ while IFS= read -r line; do
         NODE_NAME=$(echo "$line" | sed -n 's/.*Nodename=\([^ ]*\) .*/\1/p')
         FILE_PATH=$(echo "$line" | sed -n 's/.*File=\([^ ]*\) .*/\1/p')
         GPU_COUNT=$(echo "$line" | sed -n 's/.*Count=\([0-9]*\) .*/\1/p')
-        
-        # Calculate the MPS count based on GPU count
-        MPS_COUNT=$((GPU_COUNT * 100))
 
-        # Check if an MPS line for this node already exists in the original gres.conf
-        if ! grep -q "Nodename=$NODE_NAME Name=mps" "$GRES_CONF"; then
-            # Add the MPS line to the temporary file with the correct File path
-            echo "Nodename=$NODE_NAME Name=mps Count=$MPS_COUNT File=$FILE_PATH" >> "$TEMP_FILE"
+        # Debugging step: check the values of NODE_NAME, FILE_PATH, GPU_COUNT
+        echo "DEBUG: NODE_NAME=$NODE_NAME, FILE_PATH=$FILE_PATH, GPU_COUNT=$GPU_COUNT"
+
+        # Ensure FILE_PATH is not empty
+        if [ -z "$FILE_PATH" ]; then
+            echo "ERROR: No device file found for GPU, skipping MPS line addition."
+        else
+            # Calculate the MPS count based on GPU count
+            MPS_COUNT=$((GPU_COUNT * 100))
+
+            # Check if an MPS line for this node already exists in the original gres.conf
+            if ! grep -q "Nodename=$NODE_NAME Name=mps" "$GRES_CONF"; then
+                # Add the MPS line to the temporary file with the correct File path
+                echo "Nodename=$NODE_NAME Name=mps Count=$MPS_COUNT File=$FILE_PATH" >> "$TEMP_FILE"
+            fi
         fi
     fi
 done < "$GRES_CONF"
@@ -71,3 +79,4 @@ echo "Updated gres.conf with MPS configuration where needed."
 
 # Restart slurmctld to apply changes
 systemctl restart slurmctld
+echo "Restarted slurmctld to apply configuration changes."
