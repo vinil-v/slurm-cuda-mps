@@ -4,7 +4,7 @@
 #SBATCH --error=cuda_mps_error.%j         # Error file
 #SBATCH --ntasks=1                        # Number of tasks (processes)
 #SBATCH --cpus-per-task=6                 # Number of CPU cores per task (adjust as needed)
-#SBATCH --gres=gpu:2                      # Request 2 GPUs (adjust as needed)
+#SBATCH --gres=gpu:1                     # Request 2 GPUs (adjust as needed)
 #SBATCH --gres=mps:25                     # Request MPS shares
 #SBATCH --time=01:00:00                   # Time limit (adjust as needed)
 #SBATCH --partition=hpc                   # Specify the GPU partition (adjust as needed)
