@@ -1,13 +1,13 @@
 #!/bin/sh
 
-# Backup paths
+# Define file paths
 SLURM_CONF="/etc/slurm/slurm.conf"
 AZURE_CONF="/etc/slurm/azure.conf"
 GRES_CONF="/etc/slurm/gres.conf"
 TEMP_FILE="/tmp/gres.conf.tmp"
 AZURE_TEMP_FILE="/tmp/azure.conf.tmp"
 
-# Backup slurm.conf and update only if "mps" is missing in GresTypes
+# Backup slurm.conf and update GresTypes to include mps if not already there
 if ! grep -q "GresTypes=gpu,mps" "$SLURM_CONF"; then
     cp "$SLURM_CONF" "${SLURM_CONF}.bak"
     sed -i 's/GresTypes=gpu/GresTypes=gpu,mps/' "$SLURM_CONF"
@@ -18,12 +18,12 @@ fi
 
 # Process each line in azure.conf
 cp "$AZURE_CONF" "$AZURE_TEMP_FILE"
-> "$AZURE_TEMP_FILE"  # Clear temporary file before use
+> "$AZURE_TEMP_FILE"
 
 while IFS= read -r line; do
-    # Check if the line contains a GPU entry and lacks mps, to avoid duplicates
+    # Check if the line contains a GPU entry and lacks mps to avoid duplicates
     if echo "$line" | grep -q "Gres=gpu" && ! echo "$line" | grep -q "mps:"; then
-        # Extract GPU count
+        # Extract GPU count and calculate MPS count based on GPU count
         GPU_COUNT=$(echo "$line" | sed -n 's/.*Gres=gpu:\([0-9]\+\).*/\1/p')
         MPS_COUNT=$((GPU_COUNT * 100))
         
@@ -40,10 +40,9 @@ done < "$AZURE_CONF"
 mv "$AZURE_TEMP_FILE" "$AZURE_CONF"
 echo "Updated Gres line in azure.conf to set mps based on GPU count."
 
-# Clear temporary file for gres.conf
+# Process each line in gres.conf
 > "$TEMP_FILE"
 
-# Process each line in gres.conf
 while IFS= read -r line; do
     # Write the current line to the temporary file
     echo "$line" >> "$TEMP_FILE"
@@ -54,6 +53,8 @@ while IFS= read -r line; do
         NODE_NAME=$(echo "$line" | sed -n 's/.*Nodename=\([^ ]*\) .*/\1/p')
         FILE_PATH=$(echo "$line" | sed -n 's/.*File=\([^ ]*\) .*/\1/p')
         GPU_COUNT=$(echo "$line" | sed -n 's/.*Count=\([0-9]*\) .*/\1/p')
+        
+        # Calculate the MPS count based on GPU count
         MPS_COUNT=$((GPU_COUNT * 100))
 
         # Check if an MPS line for this node already exists in the original gres.conf
