@@ -1,7 +1,10 @@
 #!/bin/bash
+
+# Extract the cluster name from slurm.conf
 CLUSTER_NAME=$(grep ^ClusterName /etc/slurm/slurm.conf | cut -d "=" -f2)
 echo "Cluster Name: $CLUSTER_NAME"
 CONF_DIR="/sched/$CLUSTER_NAME"
+
 # Define file paths
 SLURM_CONF="$CONF_DIR/slurm.conf"
 AZURE_CONF="$CONF_DIR/azure.conf"
@@ -18,7 +21,7 @@ else
     echo "slurm.conf already has GresTypes=gpu,mps."
 fi
 
-# Process each line in azure.conf
+# Process each line in azure.conf to add mps based on GPU count
 cp "$AZURE_CONF" "$AZURE_TEMP_FILE"
 > "$AZURE_TEMP_FILE"
 
@@ -28,7 +31,7 @@ while IFS= read -r line; do
         # Extract GPU count and calculate MPS count based on GPU count
         GPU_COUNT=$(echo "$line" | sed -n 's/.*Gres=gpu:\([0-9]\+\).*/\1/p')
         MPS_COUNT=$((GPU_COUNT * 100))
-        
+
         # Modify the line with the correct mps value
         modified_line=$(echo "$line" | sed -E "s/Gres=gpu:[0-9]+/Gres=gpu:$GPU_COUNT,mps:$MPS_COUNT/")
         echo "$modified_line" >> "$AZURE_TEMP_FILE"
@@ -42,16 +45,16 @@ done < "$AZURE_CONF"
 mv "$AZURE_TEMP_FILE" "$AZURE_CONF"
 echo "Updated Gres line in azure.conf to set mps based on GPU count."
 
-# Process each line in gres.conf
+# Process each line in gres.conf to add MPS lines where needed
 > "$TEMP_FILE"
 
 while IFS= read -r line; do
     # Write the current line to the temporary file
     echo "$line" >> "$TEMP_FILE"
-    
+
     # Check if the line contains a GPU entry and lacks an mps entry to prevent duplication
     if echo "$line" | grep -q "Name=gpu" && ! grep -q "Name=mps" <<< "$line"; then
-        # Extract node name, file path, and GPU count
+        # Extract node name, file path, and GPU count from the gpu entry
         NODE_NAME=$(echo "$line" | sed -n 's/.*Nodename=\([^ ]*\) .*/\1/p')
         FILE_PATH=$(echo "$line" | sed -n 's/.*File=\([^ ]*\) .*/\1/p')
         GPU_COUNT=$(echo "$line" | sed -n 's/.*Count=\([0-9]*\) .*/\1/p')
