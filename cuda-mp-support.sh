@@ -5,6 +5,7 @@ SLURM_CONF="/etc/slurm/slurm.conf"
 AZURE_CONF="/etc/slurm/azure.conf"
 GRES_CONF="/etc/slurm/gres.conf"
 TEMP_FILE="/tmp/gres.conf.tmp"
+AZURE_TEMP_FILE="/tmp/azure.conf.tmp"
 
 # Backup slurm.conf and update only if "mps" is missing in GresTypes
 if ! grep -q "GresTypes=gpu,mps" "$SLURM_CONF"; then
@@ -15,20 +16,27 @@ else
     echo "slurm.conf already has GresTypes=gpu,mps."
 fi
 
-# Backup azure.conf and update only if "mps" format is incorrect or missing
-if grep -q "Gres=gpu" "$AZURE_CONF"; then
-    cp "$AZURE_CONF" "${AZURE_CONF}.bak"
-    
-    # Use sed to dynamically set mps based on the GPU count
-    sed -i -E 's/(Gres=gpu:([0-9]+))(,mps:[0-9]+)?/\1,mps:\2*100/' "$AZURE_CONF"
-    
-    # Now correct the output by calculating the mps value based on the GPU count
-    sed -i -E 's/mps:([0-9]+)\*100/mps:$(echo "\1 * 100" | bc)/' "$AZURE_CONF"
-    
-    echo "Updated Gres line in azure.conf to set mps based on GPU count."
-else
-    echo "No Gres=gpu line found in azure.conf; skipping update."
-fi
+# Process each line in azure.conf
+cp "$AZURE_CONF" "$AZURE_TEMP_FILE"
+while IFS= read -r line; do
+    # Check if the line contains a GPU entry and modify the mps value
+    if echo "$line" | grep -q "Gres=gpu"; then
+        # Extract GPU count
+        GPU_COUNT=$(echo "$line" | sed -n 's/.*Gres=gpu:\([0-9]\+\).*/\1/p')
+        MPS_COUNT=$((GPU_COUNT * 100))
+        
+        # Modify the line with the correct mps value
+        modified_line=$(echo "$line" | sed -E "s/Gres=gpu:[0-9]+(,mps:[^ ]+)?/Gres=gpu:$GPU_COUNT,mps:$MPS_COUNT/")
+        echo "$modified_line" >> "$AZURE_TEMP_FILE"
+    else
+        # Copy the line as-is if no GPU entry is found
+        echo "$line" >> "$AZURE_TEMP_FILE"
+    fi
+done < "$AZURE_CONF"
+
+# Move the modified azure.conf back to the original file
+mv "$AZURE_TEMP_FILE" "$AZURE_CONF"
+echo "Updated Gres line in azure.conf to set mps based on GPU count."
 
 # Clear temporary file
 > "$TEMP_FILE"
@@ -40,7 +48,7 @@ while IFS= read -r line; do
     
     # Check if the line contains a GPU entry
     if echo "$line" | grep -q "Name=gpu"; then
-        # Extract node name and file path
+        # Extract node name, file path, and GPU count
         NODE_NAME=$(echo "$line" | sed -n 's/.*Nodename=\([^ ]*\) .*/\1/p')
         FILE_PATH=$(echo "$line" | sed -n 's/.*File=\([^ ]*\) .*/\1/p')
         GPU_COUNT=$(echo "$line" | sed -n 's/.*Count=\([0-9]*\) .*/\1/p')
