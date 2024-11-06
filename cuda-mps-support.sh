@@ -1,9 +1,11 @@
 #!/bin/bash
-
+CLUSTER_NAME=$(grep ^ClusterName /etc/slurm/slurm.conf | cut -d "=" -f2)
+echo "Cluster Name: $CLUSTER_NAME"
+CONF_DIR="/sched/$CLUSTER_NAME"
 # Define file paths
-SLURM_CONF="/etc/slurm/slurm.conf"
-AZURE_CONF="/etc/slurm/azure.conf"
-GRES_CONF="/etc/slurm/gres.conf"
+SLURM_CONF="$CONF_DIR/slurm.conf"
+AZURE_CONF="$CONF_DIR/azure.conf"
+GRES_CONF="$CONF_DIR/gres.conf"
 TEMP_FILE="/tmp/gres.conf.tmp"
 AZURE_TEMP_FILE="/tmp/azure.conf.tmp"
 
