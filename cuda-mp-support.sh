@@ -18,18 +18,20 @@ fi
 
 # Process each line in azure.conf
 cp "$AZURE_CONF" "$AZURE_TEMP_FILE"
+> "$AZURE_TEMP_FILE"  # Clear temporary file before use
+
 while IFS= read -r line; do
-    # Check if the line contains a GPU entry and modify the mps value
-    if echo "$line" | grep -q "Gres=gpu"; then
+    # Check if the line contains a GPU entry and lacks mps, to avoid duplicates
+    if echo "$line" | grep -q "Gres=gpu" && ! echo "$line" | grep -q "mps:"; then
         # Extract GPU count
         GPU_COUNT=$(echo "$line" | sed -n 's/.*Gres=gpu:\([0-9]\+\).*/\1/p')
         MPS_COUNT=$((GPU_COUNT * 100))
         
         # Modify the line with the correct mps value
-        modified_line=$(echo "$line" | sed -E "s/Gres=gpu:[0-9]+(,mps:[^ ]+)?/Gres=gpu:$GPU_COUNT,mps:$MPS_COUNT/")
+        modified_line=$(echo "$line" | sed -E "s/Gres=gpu:[0-9]+/Gres=gpu:$GPU_COUNT,mps:$MPS_COUNT/")
         echo "$modified_line" >> "$AZURE_TEMP_FILE"
     else
-        # Copy the line as-is if no GPU entry is found
+        # Copy the line as-is if it already has mps or no GPU entry
         echo "$line" >> "$AZURE_TEMP_FILE"
     fi
 done < "$AZURE_CONF"
@@ -38,7 +40,7 @@ done < "$AZURE_CONF"
 mv "$AZURE_TEMP_FILE" "$AZURE_CONF"
 echo "Updated Gres line in azure.conf to set mps based on GPU count."
 
-# Clear temporary file
+# Clear temporary file for gres.conf
 > "$TEMP_FILE"
 
 # Process each line in gres.conf
@@ -46,8 +48,8 @@ while IFS= read -r line; do
     # Write the current line to the temporary file
     echo "$line" >> "$TEMP_FILE"
     
-    # Check if the line contains a GPU entry
-    if echo "$line" | grep -q "Name=gpu"; then
+    # Check if the line contains a GPU entry and lacks an mps entry to prevent duplication
+    if echo "$line" | grep -q "Name=gpu" && ! grep -q "Name=mps" <<< "$line"; then
         # Extract node name, file path, and GPU count
         NODE_NAME=$(echo "$line" | sed -n 's/.*Nodename=\([^ ]*\) .*/\1/p')
         FILE_PATH=$(echo "$line" | sed -n 's/.*File=\([^ ]*\) .*/\1/p')
@@ -56,7 +58,7 @@ while IFS= read -r line; do
 
         # Check if an MPS line for this node already exists in the original gres.conf
         if ! grep -q "Nodename=$NODE_NAME Name=mps" "$GRES_CONF"; then
-            # Add the MPS line to the temporary file
+            # Add the MPS line to the temporary file with the correct File path
             echo "Nodename=$NODE_NAME Name=mps Count=$MPS_COUNT File=$FILE_PATH" >> "$TEMP_FILE"
         fi
     fi
