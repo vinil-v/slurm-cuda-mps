@@ -56,13 +56,13 @@ while IFS= read -r line; do
     if echo "$line" | grep -q "Name=gpu" && ! grep -q "Name=mps" <<< "$line"; then
         # Extract node name, file path, and GPU count from the gpu entry
         NODE_NAME=$(echo "$line" | sed -n 's/.*Nodename=\([^ ]*\) .*/\1/p')
-        FILE_PATH=$(echo "$line" | sed -n 's/.*File=\([^ ]*\) .*/\1/p')
+        FILE_PATH=$(echo "$line" | sed -n 's/.*File=\([^ ]*\)/\1/p')
         GPU_COUNT=$(echo "$line" | sed -n 's/.*Count=\([0-9]*\) .*/\1/p')
 
         # Debugging step: check the values of NODE_NAME, FILE_PATH, GPU_COUNT
         echo "DEBUG: NODE_NAME=$NODE_NAME, FILE_PATH=$FILE_PATH, GPU_COUNT=$GPU_COUNT"
 
-        # Ensure FILE_PATH is not empty
+        # Ensure FILE_PATH is not empty and handle correctly
         if [ -z "$FILE_PATH" ]; then
             echo "ERROR: No device file found for GPU, skipping MPS line addition."
         else
